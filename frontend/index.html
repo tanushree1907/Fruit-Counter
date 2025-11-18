@@ -1,3 +1,4 @@
+<!-- ...existing code... -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,12 +16,6 @@
   .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 50; }
   .modal-content { background: #1f1f1f; margin: 8% auto; padding: 20px; width: 360px; border-radius: 8px; text-align: center; position: relative; max-height:70vh; overflow:auto; }
   .close { position: absolute; right: 12px; top: 8px; cursor: pointer; color: #fff; font-size: 22px; }
-  input { width: 100%; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid #333; background: #0f0f0f; color: #fff; }
-  .auth-row { display:flex; gap:10px; justify-content:center; margin-top:8px; }
-  #userMenu { position: absolute; right: 20px; top: 64px; background: #1f1f1f; border-radius: 6px; padding: 8px; display: none; box-shadow: 0 6px 18px rgba(0,0,0,0.6); }
-  #userMenu button { background: transparent; color: #fff; border: none; padding: 6px 8px; cursor: pointer; width: 100%; text-align: left; }
-  /* cart button styling */
-  #cartBtn { margin-right: 10px; background: #2196f3; }
   .qty-badge { display:inline-block; min-width:22px; text-align:center; padding:2px 6px; border-radius:12px; background:#333; color:#fff; margin-left:8px; font-size:12px; }
   .cart-item { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #222; }
   .small-btn { padding:6px 8px; font-size:13px; border-radius:6px; background:#333; color:#fff; border:none; cursor:pointer; }
@@ -31,11 +26,6 @@
   <h2>Fruit Counter</h2>
   <div style="position:relative; display:flex; align-items:center;">
     <button id="cartBtn">Cart <span id="cartCount" class="qty-badge">0</span></button>
-    <button id="loginBtn">Login / Register</button>
-    <div id="userMenu">
-      <div id="userName" style="padding:6px 8px; color:#ddd;"></div>
-      <button id="logoutBtn">Logout</button>
-    </div>
   </div>
 </header>
 
@@ -53,24 +43,7 @@
   </div>
 </div>
 
-<!-- Login/Register Modal -->
-<div id="authModal" class="modal" aria-hidden="true">
-  <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <span class="close" title="Close">&times;</span>
-    <h3 id="authTitle">Login / Register</h3>
-    <input type="text" id="name" placeholder="Name (optional for login)">
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="password" placeholder="Password">
-    <div class="auth-row">
-      <button id="loginSubmit">Login</button>
-      <button id="registerSubmit">Register</button>
-    </div>
-    <p id="authMsg" style="color:#f88; margin-top:10px;"></p>
-  </div>
-</div>
-
 <script>
-/* Auth + UI logic: maintains token & user in localStorage and updates header button to show user name */
 const API_BASE = 'http://localhost:4000/api';
 let cart = JSON.parse(localStorage.getItem('cart') || '[]'); // [{id,name,price,qty}]
 let currentFruits = []; // latest fetched fruits
@@ -82,44 +55,6 @@ const cartItemsEl = document.getElementById('cartItems');
 const cartCountEl = document.getElementById('cartCount');
 const cartTotalEl = document.getElementById('cartTotal');
 
-const loginBtn = document.getElementById('loginBtn');
-const authModal = document.getElementById('authModal');
-const closeAuthBtn = document.querySelector('#authModal .close');
-const loginSubmit = document.getElementById('loginSubmit');
-const registerSubmit = document.getElementById('registerSubmit');
-const logoutBtn = document.getElementById('logoutBtn');
-const userMenu = document.getElementById('userMenu');
-const userNameDisplay = document.getElementById('userName');
-const authMsg = document.getElementById('authMsg');
-
-function getStoredUser() {
-  try { return JSON.parse(localStorage.getItem('user')); } catch(e){ return null; }
-}
-function setAuth(user, token) {
-  localStorage.setItem('user', JSON.stringify(user));
-  if (token) localStorage.setItem('token', token);
-}
-function clearAuth() {
-  localStorage.removeItem('user');
-  localStorage.removeItem('token');
-}
-
-function updateAuthUI() {
-  const user = getStoredUser();
-  if (user && (user.name || user.email)) {
-    loginBtn.textContent = user.name || user.email.split('@')[0];
-    loginBtn.onclick = () => {
-      userNameDisplay.textContent = (user.name || user.email);
-      userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
-    };
-  } else {
-    loginBtn.textContent = 'Login / Register';
-    loginBtn.onclick = () => { authMsg.textContent = ''; authModal.style.display = 'block'; };
-    userMenu.style.display = 'none';
-  }
-}
-
-/* Cart helpers */
 function saveCart() {
   localStorage.setItem('cart', JSON.stringify(cart));
   updateCartBadge();
@@ -157,7 +92,6 @@ function renderCart() {
   cartTotalEl.textContent = calculateTotal().toFixed(2);
 }
 
-/* Fetch and render fruits */
 async function loadFruits() {
   try {
     const res = await fetch(API_BASE + '/fruits');
@@ -181,67 +115,49 @@ async function loadFruits() {
   }
 }
 
-/* Add to cart: decrement server-side (if endpoint) and update client cart + UI */
 async function addToCart(id) {
   try {
-    // Find fruit from latest fetch
     const fruit = currentFruits.find(f => f.id === id);
     if (!fruit || fruit.stock <= 0) { alert('Out of stock'); return; }
 
-    // Attempt server decrement (optional). If your backend requires auth, token will be sent.
+    // server decrement (best-effort)
     try {
-      const token = localStorage.getItem('token');
-      const opts = { method: 'POST' };
-      const headers = {};
-      if (token) headers['Authorization'] = 'Bearer ' + token;
-      const res = await fetch(`${API_BASE}/cart/add/${id}`, { method: 'POST', headers });
+      const res = await fetch(`${API_BASE}/cart/add/${id}`, { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(()=>({}));
         if (err && err.error) { alert(err.error); return; }
       }
-    } catch (e) {
-      // ignore server error, still continue with client-side update
-    }
+    } catch (e) { /* ignore */ }
 
-    // update client stocks & cart
-    // reduce stock locally
+    // update client stock & cart
     const stockEl = document.querySelector(`.stock[data-id="${id}"]`);
     if (stockEl) {
       let newStock = Number(stockEl.textContent) - 1;
       stockEl.textContent = newStock;
-      // disable Add button if 0
       if (newStock <= 0) {
         const btn = document.querySelector(`#fruit-${id} button`);
         if (btn) btn.disabled = true;
       }
     }
-    // update currentFruits array
     const cf = currentFruits.find(f => f.id === id);
     if (cf) cf.stock = Math.max(0, cf.stock - 1);
 
-    // update cart: increment qty or add new
     const existing = cart.find(c => c.id === id);
-    if (existing) {
-      existing.qty += 1;
-    } else {
-      cart.push({ id: fruit.id, name: fruit.name, price: fruit.price, qty: 1 });
-    }
+    if (existing) existing.qty += 1;
+    else cart.push({ id: fruit.id, name: fruit.name, price: fruit.price, qty: 1 });
+
     saveCart();
     renderCart();
-    alert(`${fruit.name} added to cart!`);
   } catch (err) {
     console.error(err);
     alert('Failed to add to cart');
   }
 }
 
-/* Cart modal controls and item actions */
+/* Cart modal behavior */
 cartBtn.onclick = () => { renderCart(); cartModal.style.display = 'block'; };
 closeCart.onclick = () => cartModal.style.display = 'none';
-window.onclick = (e) => {
-  if (e.target === cartModal) cartModal.style.display = 'none';
-  if (e.target === authModal) authModal.style.display = 'none';
-};
+window.onclick = (e) => { if (e.target === cartModal) cartModal.style.display = 'none'; };
 cartItemsEl.addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -250,13 +166,10 @@ cartItemsEl.addEventListener('click', (e) => {
   const idx = cart.findIndex(i => i.id === id);
   if (idx === -1) return;
   if (action === 'inc') {
-    // check stock availability in currentFruits
     const fruit = currentFruits.find(f => f.id === id);
     if (fruit && fruit.stock > 0) {
-      // call server endpoint to decrement stock optionally
       fetch(`${API_BASE}/cart/add/${id}`, { method: 'POST' }).catch(()=>{});
       cart[idx].qty += 1;
-      // update stock UI
       const stockEl = document.querySelector(`.stock[data-id="${id}"]`);
       if (stockEl) {
         let newStock = Number(stockEl.textContent) - 1;
@@ -271,7 +184,6 @@ cartItemsEl.addEventListener('click', (e) => {
     }
   } else if (action === 'dec') {
     cart[idx].qty -= 1;
-    // increment stock UI
     const stockEl = document.querySelector(`.stock[data-id="${id}"]`);
     if (stockEl) {
       let newStock = Number(stockEl.textContent) + 1;
@@ -281,7 +193,6 @@ cartItemsEl.addEventListener('click', (e) => {
     }
     if (cart[idx].qty <= 0) cart.splice(idx,1);
   } else if (action === 'remove') {
-    // return quantity to stock UI
     const qty = cart[idx].qty;
     const stockEl = document.querySelector(`.stock[data-id="${id}"]`);
     if (stockEl) {
@@ -296,90 +207,6 @@ cartItemsEl.addEventListener('click', (e) => {
   renderCart();
 });
 
-/* Modal controls for auth */
-closeAuthBtn.onclick = () => authModal.style.display = 'none';
-
-/* Login */
-loginSubmit.onclick = async () => {
-  authMsg.textContent = '';
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  if (!email || !password) { authMsg.textContent = 'Provide email and password'; return; }
-  try {
-    const res = await fetch(API_BASE + '/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      const user = data.user || { name: data.name, email: data.email } || { email };
-      setAuth(user, data.token || data.accessToken);
-      updateAuthUI();
-      authModal.style.display = 'none';
-    } else {
-      authMsg.textContent = data.error || data.message || 'Login failed';
-    }
-  } catch (err) {
-    console.error(err);
-    authMsg.textContent = 'Network error';
-  }
-};
-
-/* Register */
-registerSubmit.onclick = async () => {
-  authMsg.textContent = '';
-  const name = document.getElementById('name').value.trim();
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  if (!email || !password) { authMsg.textContent = 'Provide email and password'; return; }
-  try {
-    const res = await fetch(API_BASE + '/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      if (data.token && data.user) {
-        setAuth(data.user, data.token);
-        updateAuthUI();
-        authModal.style.display = 'none';
-      } else {
-        const loginRes = await fetch(API_BASE + '/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const loginData = await loginRes.json();
-        if (loginRes.ok) {
-          const user = loginData.user || { name: name, email };
-          setAuth(user, loginData.token || loginData.accessToken);
-          updateAuthUI();
-          authModal.style.display = 'none';
-        } else {
-          authMsg.textContent = data.message || 'Registered. Please login.';
-        }
-      }
-    } else {
-      authMsg.textContent = data.error || data.message || 'Registration failed';
-    }
-  } catch (err) {
-    console.error(err);
-    authMsg.textContent = 'Network error';
-  }
-};
-
-/* Logout */
-logoutBtn.onclick = () => {
-  if (confirm('Logout?')) {
-    clearAuth();
-    updateAuthUI();
-    userMenu.style.display = 'none';
-  }
-};
-
-/* Small utility to avoid injection in inserted HTML */
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -390,8 +217,7 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-/* Initialize */
-updateAuthUI();
+/* Init */
 loadFruits();
 renderCart();
 
@@ -400,3 +226,4 @@ window.addToCart = addToCart;
 </script>
 </body>
 </html>
+<!-- ...existing code... -->
